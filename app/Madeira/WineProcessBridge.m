@@ -385,8 +385,28 @@ static void *wine_process_thread(void *arg) {
          * For debugging, set MADEIRA_DEBUG_VERBOSE=1 in the environment to
          * restore the full trace channel set. */
         {
+            /* Documents/madeira-winedebug.txt overrides the channel set verbatim,
+             * so a diagnosis can be narrowed without a rebuild-and-reinstall
+             * cycle. Wine only prints err/fixme by default, which hides the
+             * WARN-level messages that explain most "X failed to initialise"
+             * cases -- e.g. wined3d's "Failed to load vulkan-1.dll". Example:
+             *
+             *     err+all,warn+vulkan,warn+d3d,warn+wined3d
+             *
+             * Same opt-in-file pattern as madeira-args.txt / madeira-d3d.txt. */
+            NSString *dbgPath = [NSSearchPathForDirectoriesInDomains(
+                                     NSDocumentDirectory, NSUserDomainMask, YES).firstObject
+                                 stringByAppendingPathComponent:@"madeira-winedebug.txt"];
+            NSString *dbgCfg = [NSString stringWithContentsOfFile:dbgPath
+                                                        encoding:NSUTF8StringEncoding
+                                                           error:NULL];
+            dbgCfg = [dbgCfg stringByTrimmingCharactersInSet:
+                          [NSCharacterSet whitespaceAndNewlineCharacterSet]];
             const char *verbose = getenv("MADEIRA_DEBUG_VERBOSE");
-            if (verbose && *verbose && *verbose != '0') {
+            if (dbgCfg.length) {
+                setenv("WINEDEBUG", dbgCfg.UTF8String, 1);
+                LOG("WINEDEBUG = %{public}s (from madeira-winedebug.txt)", dbgCfg.UTF8String);
+            } else if (verbose && *verbose && *verbose != '0') {
                 setenv("WINEDEBUG", "err+all,fixme+all,warn+module,warn+file,trace+process,trace+module,trace+loaddll,trace+loadorder,trace+win,trace+user32,trace+syscall,trace+file", 1);
                 LOG("WINEDEBUG = verbose (MADEIRA_DEBUG_VERBOSE set)");
             } else {
@@ -572,6 +592,56 @@ static void *wine_process_thread(void *arg) {
             LOG("Wine log file: %{public}s", logPath.UTF8String);
             /* Expose the app Documents dir to Wine code (e.g. for fex-jit-dump.bin) */
             setenv("MADEIRA_DOCS_DIR", docs.UTF8String, 1);
+
+            /* General env overrides: Documents/madeira-env.txt, one KEY=VALUE
+             * per line, '#' comments ignored. Saves inventing a new file per
+             * knob -- e.g. MADEIRA_REAL_DISPLAY_DEVICES=1 to run Wine's real
+             * display-device enumeration (needed by wined3d/d3d9). */
+            {
+                NSString *envPath = [docs stringByAppendingPathComponent:@"madeira-env.txt"];
+                NSString *envTxt = [NSString stringWithContentsOfFile:envPath
+                                                            encoding:NSUTF8StringEncoding
+                                                               error:NULL];
+                for (NSString *rawLine in [envTxt componentsSeparatedByCharactersInSet:
+                                               [NSCharacterSet newlineCharacterSet]]) {
+                    NSString *line = [rawLine stringByTrimmingCharactersInSet:
+                                          [NSCharacterSet whitespaceCharacterSet]];
+                    if (!line.length || [line hasPrefix:@"#"]) continue;
+                    NSRange eq = [line rangeOfString:@"="];
+                    if (eq.location == NSNotFound) continue;
+                    NSString *k = [[line substringToIndex:eq.location]
+                                      stringByTrimmingCharactersInSet:
+                                          [NSCharacterSet whitespaceCharacterSet]];
+                    NSString *v = [[line substringFromIndex:eq.location + 1]
+                                      stringByTrimmingCharactersInSet:
+                                          [NSCharacterSet whitespaceCharacterSet]];
+                    if (!k.length) continue;
+                    setenv(k.UTF8String, v.UTF8String, 1);
+                    LOG("env: %{public}s=%{public}s (madeira-env.txt)", k.UTF8String, v.UTF8String);
+                }
+            }
+
+            /* wined3d tuning, opt-in and overridable without a rebuild -- same
+             * idea as madeira-args.txt. Write e.g.
+             *
+             *     renderer=vulkan
+             *
+             * to Documents/madeira-d3d.txt to route wined3d through the Vulkan
+             * adapter (MoltenVK) instead of its GL backend. Only affects
+             * wined3d (d3d9/d3d8/ddraw); d3d11 goes through DXMT and is
+             * untouched. Absent file = upstream default. */
+            {
+                NSString *d3dPath = [docs stringByAppendingPathComponent:@"madeira-d3d.txt"];
+                NSString *d3dCfg = [NSString stringWithContentsOfFile:d3dPath
+                                                            encoding:NSUTF8StringEncoding
+                                                               error:NULL];
+                d3dCfg = [d3dCfg stringByTrimmingCharactersInSet:
+                              [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                if (d3dCfg.length) {
+                    setenv("WINE_D3D_CONFIG", d3dCfg.UTF8String, 1);
+                    LOG("WINE_D3D_CONFIG = %{public}s", d3dCfg.UTF8String);
+                }
+            }
         }
 
         // Steam S0: root CA trust. iOS has no API to enumerate system

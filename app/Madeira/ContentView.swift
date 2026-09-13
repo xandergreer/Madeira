@@ -1486,6 +1486,22 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(.purple)
 
+                // D3D9 smoke test. The cube above goes d3d11 -> DXMT -> Metal
+                // and never touches Vulkan; this one goes d3d9 -> wined3d, so
+                // it is the only way to exercise winios.drv's
+                // vulkan_surface_create -> vkCreateMetalSurfaceEXT path.
+                // Needs Documents/madeira-d3d.txt containing "renderer=vulkan"
+                // to select adapter_vk; without it wined3d picks its GL
+                // backend, which has no iOS implementation.
+                Button("x64 D3D9 clear") {
+                    setenv("MADEIRA_EXE", "d3d9tri-x64.exe", 1)
+                    unsetenv("MADEIRA_ARGS")
+                    unsetenv("MADEIRA_DESKTOP")
+                    runWineFullSequence()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.teal)
+
                 // ml731c: one-second check of the Windows clock contract
                 // (GetTickCount64 / system time / unbiased interrupt time /
                 // QueryPerformanceCounter). Verifying this by hand previously

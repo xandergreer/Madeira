@@ -180,6 +180,20 @@ static struct monitor virtual_monitor =
 };
 
 #ifdef WINE_IOS
+/* Opt-in: run Wine's real display-device enumeration instead of the
+ * virtual-monitor shortcut. Needed by wined3d (d3d9/d3d8/ddraw), which
+ * requires a display source to create an output. */
+static BOOL ios_real_display_devices(void)
+{
+    static int cached = -1;
+    if (cached < 0)
+    {
+        const char *e = getenv( "MADEIRA_REAL_DISPLAY_DEVICES" );
+        cached = e && *e && *e != '0';
+    }
+    return cached;
+}
+
 /* S2 virtual desktop: screen size for the virtual monitor. The app sets
  * MADEIRA_SCREEN_W/H (device pixels, e.g. 1170x2532) in desktop mode so
  * the wine desktop covers the whole display; default stays 1024x768 for
@@ -2887,7 +2901,18 @@ static BOOL lock_display_devices( BOOL force )
     /* services do not have any adapters, only a virtual monitor */
     if (
 #ifdef WINE_IOS
-        is_service_process() ||  /* iOS: skip display-device enumeration, use virtual monitor */
+        /* is_service_process() is hardcoded TRUE on iOS (winstation_ios.c) for an
+         * unrelated reason: it makes get_desktop_window() take the force=1 server
+         * path so explorer.exe is never spawned. Reusing it here also suppresses
+         * display-device enumeration, leaving no GPU and no source -- so
+         * find_source_by_name(L"\\.\\DISPLAY1") fails and wined3d cannot create
+         * an output, which is why d3d9 could never initialise. DXMT never needed
+         * a source, so nothing noticed.
+         *
+         * Opt in with MADEIRA_REAL_DISPLAY_DEVICES=1 to run the real enumeration
+         * (which calls winios_UpdateDisplayDevices). Default keeps the old
+         * behaviour so the working d3d11/DXMT path is unaffected. */
+        (!ios_real_display_devices() && is_service_process()) ||
 #endif
         (NtUserGetObjectInformation( NtUserGetProcessWindowStation(), UOI_NAME, name, sizeof(name), NULL )
          && !wcscmp( name, wine_service_station_name )))

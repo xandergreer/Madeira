@@ -109,6 +109,17 @@ compile_unixlib "$WINE_SRC/dlls/secur32/schannel_gnutls.c" "secur32_unixlib" "se
 compile_unixlib "$BUILD_DIR/dwrite_freetype_ios.c" "dwrite_unixlib" "dwrite" \
     -I"$WINE_SRC/dlls/dwrite" -I"$REPO_ROOT/research/freetype/include" \
     -I"$REPO_ROOT/wine/build-arm64ec/include"
+# winevulkan's unix side. winevulkan.dll is a PE that reaches its unixlib
+# through __wine_unix_call (loader.c: __wine_init_unix_call + UNIX_CALL), NOT
+# through win32u -- so without this the PE loads fine and every call fails
+# silently, leaving wined3d to report "VK_KHR_surface is not available".
+# vulkan_thunks.c carries the __wine_unix_call_funcs table; vulkan.c the
+# implementations. Both are renamed to winevulkan_unix_call_funcs by
+# compile_unixlib and dispatched from virtual_ios.c's module table.
+compile_unixlib "$WINE_SRC/dlls/winevulkan/vulkan.c" "winevulkan_unixlib" "winevulkan" \
+    -I"$WINE_SRC/dlls/winevulkan" -I"$WINE_BUILD/dlls/winevulkan"
+compile_unixlib "$WINE_SRC/dlls/winevulkan/vulkan_thunks.c" "winevulkan_thunks" "winevulkan" \
+    -I"$WINE_SRC/dlls/winevulkan" -I"$WINE_BUILD/dlls/winevulkan"
 compile_unixlib "$CRYPTO_DIR/crypt32_unixlib_ios.c" "crypt32_unixlib" "crypt32" \
     -I"$WINE_SRC/dlls/crypt32" -I"$GNUTLS_PREFIX/include" \
     -include "$CRYPTO_DIR/ios_gnutls_shim.h"
@@ -163,6 +174,7 @@ ar rcs "$OBJ_DIR/libntdll_unix.a" \
     "$OBJ_DIR/audio_null_ios.o" "$OBJ_DIR/nsi_unixlib_ios.o" \
     "$OBJ_DIR/gnutls_symtab_ios.o" "$OBJ_DIR/ws2_32_unixlib.o" \
     "$OBJ_DIR/bcrypt_unixlib.o" "$OBJ_DIR/secur32_unixlib.o" "$OBJ_DIR/crypt32_unixlib.o" \
+    "$OBJ_DIR/winevulkan_unixlib.o" "$OBJ_DIR/winevulkan_thunks.o" \
     "$OBJ_DIR/dwrite_unixlib.o" \
     "$OBJ_DIR/cdrom.o" "$OBJ_DIR/debug.o" "$OBJ_DIR/env.o" "$OBJ_DIR/file.o" \
     "$OBJ_DIR/loader.o" "$OBJ_DIR/loadorder.o" "$OBJ_DIR/process.o" "$OBJ_DIR/registry.o" \

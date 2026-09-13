@@ -4660,7 +4660,16 @@ skip_reclaim_band: ;
                      * slots to a file. Lets us disassemble FEX-emitted ARM64 offline
                      * to verify codegen correctness independently. */
                     static volatile int dumped = 0;
-                    if (cnt == 1 && __sync_bool_compare_and_swap(&dumped, 0, 1))
+                    /* Skip EXC_BREAKPOINT: the only BRK that reaches the
+                     * unhandled path is our own JIT protocol (BRK #0xf00d).
+                     * In particular CMD_DETACH (x16=0) asks StikDebug to
+                     * detach, so by design nothing is left to service or step
+                     * past that BRK and it always surfaces here -- which made
+                     * every healthy run dump the whole 896MB pool. This dump
+                     * is for inspecting FEX codegen after an exec fault; a
+                     * breakpoint is never that. */
+                    if (req->exception != EXC_BREAKPOINT &&
+                        cnt == 1 && __sync_bool_compare_and_swap(&dumped, 0, 1))
                     {
                         extern void *ios_jit_rw_base_global;
                         extern size_t ios_jit_pool_size_global;

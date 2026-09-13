@@ -24,6 +24,7 @@ FAILED=0
 FAILED_FILES=""
 
 FREETYPE_DIR="$REPO_ROOT/build/freetype-ios"
+MOLTENVK_LIB="$REPO_ROOT/toolchains/MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a"
 
 compile_one() {
     local src=$1
@@ -105,6 +106,13 @@ for src in $WINE_SRC/dlls/win32u/*.c $WINE_SRC/dlls/win32u/dibdrv/*.c; do
             compile_one "$BUILD_DIR/message_ios.c" "message"
             continue
             ;;
+        vulkan)
+            # MoltenVK is linked statically (merged into libwin32u_unix.a
+            # below), so vulkan_ios.c re-enables SONAME_LIBVULKAN and
+            # rewrites the dlopen/dlsym pair onto the static symbols.
+            compile_one "$BUILD_DIR/vulkan_ios.c" "vulkan"
+            continue
+            ;;
         freetype)
             # Statically-linked freetype (build/freetype-ios). The wrapper
             # re-defines HAVE_FT2BUILD_H itself; config_ios.h's #undefs win
@@ -131,6 +139,11 @@ if [ $FAILED -gt 0 ]; then
     exit 1
 fi
 
+# winios.drv Vulkan support. Not an upstream win32u source, so it is not
+# picked up by the loop above; the ar below globs obj/*.o so compiling it
+# here is enough to get it into the archive.
+compile_one "$BUILD_DIR/vulkan_driver_ios.c" "vulkan_driver_ios"
+
 echo ""
 echo "=== Building libwin32u_unix.a ==="
 ar rcs "$OBJ_DIR/libwin32u_unix.a" "$OBJ_DIR"/*.o
@@ -142,6 +155,16 @@ if [ -f "$FREETYPE_DIR/build/libfreetype.a" ]; then
     echo "merged libfreetype.a"
 else
     echo "WARNING: no libfreetype.a — fonts will be disabled"
+fi
+
+# Same trick for MoltenVK: merging it here means the Xcode project needs no
+# new library entry to get a Vulkan implementation.
+if [ -f "$MOLTENVK_LIB" ]; then
+    libtool -static -o "$OBJ_DIR/libwin32u_unix.a" \
+        "$OBJ_DIR/libwin32u_unix.a" "$MOLTENVK_LIB" 2>/dev/null
+    echo "merged libMoltenVK.a"
+else
+    echo "WARNING: no libMoltenVK.a — Vulkan (and so wined3d/DX9) stays disabled"
 fi
 
 echo "Copying to app..."

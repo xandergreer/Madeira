@@ -127,6 +127,24 @@ static macdrv_metal_view my_view_create_metal_view(macdrv_view v, macdrv_metal_d
     return (macdrv_metal_view)CFBridgingRetain(layer);
 }
 
+/* Resolve an HWND to the CAMetalLayer that Vulkan should present into.
+ *
+ * Same rule as my_view_create_metal_view above: desktop mode uses the
+ * per-window compositor layer, game mode the fullscreen singleton. Exposed
+ * for build/win32u-unix/vulkan_driver_ios.c, which needs a layer to hand to
+ * vkCreateMetalSurfaceEXT and has no way to know which mode is active. */
+void *madeira_metal_layer_for_hwnd(void *hwnd)
+{
+    CAMetalLayer *layer;
+
+    if (madeira_desktop_mode()) return (__bridge void *)winios_metal_layer_for_hwnd(hwnd);
+
+    pthread_mutex_lock(&g_lock);
+    layer = g_layer;
+    pthread_mutex_unlock(&g_lock);
+    return (__bridge void *)layer;
+}
+
 static macdrv_metal_layer my_view_get_metal_layer(macdrv_metal_view v) {
     return (macdrv_metal_layer)v;
 }

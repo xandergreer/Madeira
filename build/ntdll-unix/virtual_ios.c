@@ -5496,6 +5496,7 @@ extern const void *audio_null_ios_unix_call_funcs[];
  * crypt32) resolve libgnutls statically via build/crypto-unix/
  * gnutls_symtab_ios.c instead of dlopen. */
 extern const void *ws2_32_unix_call_funcs[];
+extern const void *winevulkan_unix_call_funcs[];
 extern const void *bcrypt_unix_call_funcs[];
 extern const void *secur32_unix_call_funcs[];
 extern const void *crypt32_unix_call_funcs[];
@@ -5579,6 +5580,11 @@ static NTSTATUS load_builtin_unixlib( void *module, BOOL wow, const void **funcs
             *funcs = (const void *)ws2_32_unix_call_funcs;
             dprintf(2, "[unixlib] module %p (%s) -> ws2_32_unix_call_funcs (%p)\n",
                 module, match, (void *)ws2_32_unix_call_funcs);
+            status = STATUS_SUCCESS;
+        } else if (match && strstr(match, "winevulkan")) {
+            *funcs = (const void *)winevulkan_unix_call_funcs;
+            dprintf(2, "[unixlib] module %p (%s) -> winevulkan_unix_call_funcs (%p)\n",
+                module, match, (void *)winevulkan_unix_call_funcs);
             status = STATUS_SUCCESS;
         } else if (match && strstr(match, "bcrypt")) {
             *funcs = (const void *)bcrypt_unix_call_funcs;

@@ -60,6 +60,11 @@ extern UINT winios_pShowWindow( HWND hwnd, INT cmd, RECT *rect, UINT swp ) __att
 extern void winios_pWindowPosChanged( HWND hwnd, HWND insert_after, HWND owner_hint, UINT swp_flags,
                                       const struct window_rects *new_rects, struct window_surface *surface ) __attribute__((weak));
 
+/* Vulkan surface support — implemented in vulkan_driver_ios.c, which binds
+ * MoltenVK to the compositor's per-HWND CAMetalLayer. */
+extern UINT winios_VulkanInit( UINT version, void *vulkan_handle,
+                               const struct vulkan_driver_funcs **driver_funcs );
+
 static struct user_driver_funcs winios_user_driver;
 
 /* C bridge for Winios.m to inject mouse input without pulling in Wine
@@ -1581,6 +1586,7 @@ static void load_display_driver(void)
             dprintf( 2, "[winios] desktop mode: window-surface compositing ENABLED\n" );
         }
         winios_user_driver.pUpdateDisplayDevices = winios_UpdateDisplayDevices;
+        winios_user_driver.pVulkanInit = winios_VulkanInit;
         __wine_set_user_driver( &winios_user_driver, WINE_GDI_DRIVER_VERSION );
 #else
         __wine_set_user_driver( &null_user_driver, WINE_GDI_DRIVER_VERSION );
